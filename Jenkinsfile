@@ -12,8 +12,11 @@ pipeline {
             }
         }
         stage('Unity'){
-            sh 'git https://github.com/santife/helloworld.git'
-            sh 'ls -lrt'
+            agent any
+            steps {
+                sh 'git https://github.com/santife/helloworld.git'
+                sh 'ls -lrt'
+            }
         }
     }
 }
