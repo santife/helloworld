@@ -14,7 +14,7 @@ pipeline {
         stage('Unity'){
             agent any
             steps {
-                sh 'git https://github.com/santife/helloworld.git'
+                git 'https://github.com/santife/helloworld.git'
                 sh 'ls -lrt'
             }
         }
