@@ -1,22 +1,48 @@
 pipeline {
     agent any
     stages {
-        stage('Build') {
-            agent any
+        stage ('Get Code'){
             steps {
-                sh 'echo "Hello World"'
-                sh '''
-                echo "Multiline shell steps works too"
-                ls -lah
-                '''
+                //Optenemos el codigo de nuestro Git
+                git 'http://github.com/santife/helloworld.git'
             }
         }
-        stage('Unity'){
-            agent any
+        
+        stage ('Build') {
             steps {
-                git 'https://github.com/santife/helloworld.git'
+                echo WORKSPACE
+                sh 'hostname'
                 sh 'ls -lrt'
             }
         }
+        
+        stage('unit') {
+            steps {
+                sh '''
+                    export PYTHONPATH=$(pwd)
+                    pytest --junitxml=result_unit.xml test/unit
+                '''
+            }
+        }
+        
+        stage('Rest') {
+            steps {
+                sh '''
+                    export FLASK_APP=app/api.py
+                    export FLASK_ENV=development
+                    flask run &
+                    java -jar /var/lib/jenkins/workspace/wiremock/wiremock-standalone-3.3.1.jar --port 9090 --root-dir test/wiremock/ &
+                    export PYTHONPATH=$(pwd)
+                    pytest --junitxml=result_unit.xml test/unit
+                '''
+            }
+        }
+        
+        stage ('Result') {
+            steps {
+                junit 'result*.xml'
+            }
+        }
+
     }
 }
