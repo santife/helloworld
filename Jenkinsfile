@@ -29,7 +29,7 @@ pipeline {
             steps {
                 sh '''
                     java -jar /var/lib/jenkins/workspace/wiremock/wiremock-standalone-3.3.1.jar --port 9090 --root-dir test/wiremock/ &
-                    sleep 3 //Solucion al problema de arranque del servicio
+                    sleep 3 
                     export FLASK_APP=app/api.py
                     export FLASK_ENV=development
                     flask run & 
