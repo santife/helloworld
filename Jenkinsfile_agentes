@@ -1,0 +1,71 @@
+pipeline {
+    agent none
+    stages {
+        stage ('Get Code'){
+            agent {
+                label 'centos1'
+            }
+            steps {
+                //Optenemos el codigo de nuestro Git
+                git 'http://github.com/santife/helloworld.git'
+                stash name: 'archivos', includes: '**/*'
+            }
+        }
+        
+        stage ('Build') {
+            agent {
+                label 'centos1'
+            }
+            steps {
+                echo WORKSPACE
+                sh 'hostname'
+                sh 'ls -lrt'
+            }
+        }
+        stage ('test'){
+            parallel {
+                stage('unit') {
+                    agent {
+                        label 'centos2'
+                    }
+                    steps {
+                        unstash 'archivos'
+                        sh 'hostname'
+                        sh 'whoami'
+                        sh '''
+                            export PYTHONPATH=$(pwd)
+                            pytest --junitxml=result_unit.xml test/unit
+                    '''
+                    }
+                }
+                
+                stage('Rest') {
+                    agent {
+                        label 'centos1'
+                    }
+                    steps {
+                        sh '''
+                            export FLASK_APP=app/api.py
+                            export FLASK_ENV=development
+                            flask run &
+                            java -jar /var/lib/jenkins/workspace/wiremock/wiremock-standalone-3.3.1.jar --port 9090 --root-dir test/wiremock/ &
+                            sleep 3
+                            export PYTHONPATH=$(pwd)
+                            pytest --junitxml=result_unit.xml test/rest
+                        '''
+                    }
+                }
+            }
+        }
+        
+        stage ('Result') {
+            agent {
+                label 'centos1'
+            }
+            steps {
+                junit 'result*.xml'
+            }
+        }
+
+    }
+}
