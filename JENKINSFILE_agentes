@@ -51,7 +51,7 @@ pipeline {
                             java -jar /var/lib/jenkins/workspace/wiremock/wiremock-standalone-3.3.1.jar --port 9090 --root-dir test/wiremock/ &
                             sleep 3
                             export PYTHONPATH=$(pwd)
-                            pytest --junitxml=result_unit.xml test/rest
+                            pytest --junitxml=result_rest.xml test/rest
                         '''
                     }
                 }
