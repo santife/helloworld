@@ -5,6 +5,7 @@ pipeline {
             steps {
                 //Optenemos el codigo de nuestro Git
                 git 'http://github.com/santife/helloworld.git'
+                git branch -D develop
             }
         }
         
