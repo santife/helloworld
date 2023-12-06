@@ -28,7 +28,7 @@ pipeline {
         stage('Rest') {
             steps {
                 sh '''
-                    java -jar /var/lib/jenkins/workspace/wiremock/wiremock-standalone-3.3.1.jar --port 9090 --root-dir test/wiremock/ &
+                    java -jar /var/lib/jenkins/workspace/wiremock-standalone-3.3.1.jar --port 9090 --root-dir test/wiremock/ &
                     sleep 3 
                     export FLASK_APP=app/api.py
                     export FLASK_ENV=development
