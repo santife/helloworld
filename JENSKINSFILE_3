@@ -4,7 +4,7 @@ pipeline {
         stage ('Get Code'){
             steps {
                 //Optenemos el codigo de nuestro Git
-                git 'http://github.com/santife/helloworld.git'
+                git url: 'http://github.com/santife/helloworld.git', branch:'develop'
                 
             }
         }
@@ -29,7 +29,7 @@ pipeline {
         stage('Rest') {
             steps {
                 sh '''
-                    java -jar /var/lib/jenkins/workspace/wiremock-standalone-3.3.1.jar --port 9090 --root-dir test/wiremock/ &
+                    java -jar /var/lib/jenkins/workspace/wiremock-standalone-3.3.1.jar --port 9090 --root-dir test/ &
                     sleep 3 
                     export FLASK_APP=app/api.py
                     export FLASK_ENV=development
