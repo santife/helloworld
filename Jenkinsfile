@@ -34,7 +34,7 @@ pipeline {
                     export FLASK_ENV=development
                     flask run & 
                     export PYTHONPATH=$(pwd)
-                    pytest --junitxml=result_unit.xml test/unit
+                    pytest --junitxml=result_rest.xml test/rest
                 '''
             }
         }
