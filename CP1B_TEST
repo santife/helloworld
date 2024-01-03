@@ -1,0 +1,58 @@
+pipeline {
+    agent any
+    stages {
+        stage ('Get Code'){
+            steps {
+                //Optenemos el codigo de nuestro Git
+                git url: 'http://github.com/santife/helloworld.git'
+                
+            }
+        }
+        
+        stage('Rest') {
+            steps {
+                sh '''
+                    java -jar /var/lib/jenkins/workspace/wiremock-standalone-3.3.1.jar --port 9090 --root-dir test/wiremock/ &
+                    sleep 3 
+                    export FLASK_APP=app/api.py
+                    export FLASK_ENV=development
+                    flask run & 
+                    export PYTHONPATH=$(pwd)
+                    pytest --junitxml=result_rest.xml test/rest
+                '''
+            }
+        }
+        
+        stage('unit') {
+            steps {
+                sh '''
+                    export PYTHONPATH=$(pwd)
+                    pytest --junitxml=result_unit.xml test/unit
+                '''
+                junit 'result*.xml'
+            }
+        }
+        
+        
+        stage ('Covertura') {
+            steps {
+                sh '''
+                    coverage run --branch --source=app --omit=app/__init__.py,app/api.py -m pytest test/unit
+                    coverage xml
+                '''
+                cobertura coberturaReportFile: 'coverage.xml'
+            }
+        }
+        
+        stage('Static'){
+            steps{
+                sh '''
+                    export PYTHONPATH=$(pwd)
+                    flake8 --exit-zero --format=pylint app >flake8.out
+                '''
+                recordIssues tools: [flake8(name: 'Flake8', pattern: 'flake8.out')], qualityGates: [[threshold: 10, type: 'TOTAL', unstable: true], [threshold: 12, type: 'TOTAL', unsatble: false]]
+        
+            }
+        }
+    }
+}
