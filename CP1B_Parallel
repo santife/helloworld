@@ -16,51 +16,8 @@ pipeline {
             }
         }
         
-        stage('Rest') {
-            agent {
-                label 'principal'
-            }
-            steps {
-                sh 'echo "******************"'
-                sh 'hostname'
-                sh 'whoami'
-                sh 'echo "******************"'
-                catchError (buildResult: 'UNSTABLE', stageResult: 'FAILURE'){
-                    sh '''
-                        java -jar /var/lib/jenkins/workspace/wiremock-standalone-3.3.1.jar --port 9090 --root-dir test/wiremock/ &
-                        sleep 3 
-                        export FLASK_APP=app/api.py
-                        export FLASK_ENV=development
-                        flask run & 
-                        export PYTHONPATH=$(pwd)
-                        pytest --junitxml=result_rest.xml test/rest
-                    '''
-                }
-            }
-        }
-        
-        stage('unit') {
-            agent {
-                label 'principal'
-            }
-            steps {
-                sh 'echo "******************"'
-                sh 'hostname'
-                sh 'whoami'
-                sh 'echo "******************"'
-                catchError (buildResult: 'UNSTABLE', stageResult: 'FAILURE'){
-                    sh '''
-                        export PYTHONPATH=$(pwd)
-                        pytest --junitxml=result_unit.xml test/unit
-                    '''
-                    junit 'result*.xml'
-                }
-            }
-        }
-        
-        stage ('Parallel') {
-            parallel {
-                stage ('Covertura') {
+
+                stage('Rest') {
                     agent {
                         label 'principal'
                     }
@@ -71,19 +28,67 @@ pipeline {
                         sh 'echo "******************"'
                         catchError (buildResult: 'UNSTABLE', stageResult: 'FAILURE'){
                             sh '''
+                                java -jar /var/lib/jenkins/workspace/wiremock-standalone-3.3.1.jar --port 9090 --root-dir test/wiremock/ &
+                                sleep 3 
+                                export FLASK_APP=app/api.py
+                                export FLASK_ENV=development
+                                flask run & 
+                                export PYTHONPATH=$(pwd)
+                                pytest --junitxml=result_rest.xml test/rest
+                            '''
+                        }
+                    }
+                }
+        stage ('Parallel') {
+            parallel {              
+                stage('unit') {
+                    agent {
+                        label 'principal'
+                    }
+                    steps {
+                        sh 'echo "******************"'
+                        sh 'hostname'
+                        sh 'whoami'
+                        sh 'echo "******************"'
+                        catchError (buildResult: 'UNSTABLE', stageResult: 'FAILURE'){
+                            sh '''
+                                export PYTHONPATH=$(pwd)
+                                pytest --junitxml=result_unit.xml test/unit
+                            '''
+                            junit 'result*.xml'
+                        }
+                    }
+                }
+
+            
+        
+                stage ('Covertura') {
+                    agent {
+                        label 'nodo1'
+                    }
+                    steps {
+                        unstash 'archivos'
+                        sh 'echo "******************"'
+                        sh 'hostname'
+                        sh 'whoami'
+                        sh 'echo "******************"'
+                        catchError (buildResult: 'UNSTABLE', stageResult: 'FAILURE'){
+                            sh '''
                                 coverage run --branch --source=app --omit=app/__init__.py,app/api.py -m pytest test/unit
                                 coverage xml
                             '''
-                            cobertura coberturaReportFile: 'coverage.xml', conditionalCoverageTargets: '90,70,80', lineCoverageTargets: '95,90,85'
+                            stash name: 'cobertura'
+                            //cobertura coberturaReportFile: 'coverage.xml', conditionalCoverageTargets: '90,70,80', lineCoverageTargets: '95,90,85'
                         }
                     }
                 }
                 
                 stage('Static'){
                     agent {
-                        label 'principal'
+                        label 'nodo2'
                     }
                     steps{
+                        unstash 'archivos'
                         sh 'echo "******************"'
                         sh 'hostname'
                         sh 'whoami'
@@ -93,7 +98,8 @@ pipeline {
                                 export PYTHONPATH=$(pwd)
                                 flake8 --exit-zero --format=pylint app >flake8.out
                             '''
-                            recordIssues tools: [flake8(name: 'Flake8', pattern: 'flake8.out')], qualityGates: [[threshold: 8, type: 'TOTAL', unstable: true], [threshold: 10, type: 'TOTAL', unsatble: false]]
+                            stash name: 'flake8'
+                            //recordIssues tools: [flake8(name: 'Flake8', pattern: 'flake8.out')], qualityGates: [[threshold: 8, type: 'TOTAL', unstable: true], [threshold: 10, type: 'TOTAL', unsatble: false]]
                         }
                     }
                 }
@@ -112,7 +118,8 @@ pipeline {
                             sh'''
                                 bandit --exit-zero -r . -f custom -o bandit.out --severity-level medium --msg-template "{abspath}:{line}: [{test_id}, {severity}] {msg}"
                             '''
-                            recordIssues tools: [pyLint (name: 'bandit', pattern: 'bandit.out')], qualityGates: [[threshold: 2, type: 'TOTAL', unstable: true], [threshold: 4, type: 'TOTAL', unstable: false]]
+                            stash name: 'bandit'
+                            //recordIssues tools: [pyLint (name: 'bandit', pattern: 'bandit.out')], qualityGates: [[threshold: 2, type: 'TOTAL', unstable: true], [threshold: 4, type: 'TOTAL', unstable: false]]
                         }
                     }
                 }
@@ -135,10 +142,27 @@ pipeline {
                                 flask run &
                                 /var/lib/jenkins/workspace/apache-jmeter-5.6.3/bin/jmeter.sh -n -t test.jmx -f -l test.jtl
                             '''
-                            perfReport sourceDataFiles: 'test.jtl'
+                            stash name: 'performance'
+                            //perfReport sourceDataFiles: 'test.jtl'
                         }
                     }
                 }
+            }
+        }
+        
+        stage ('resultados') {
+            agent {
+                label 'principal'
+            }
+            steps {
+                unstash 'cobertura'
+                cobertura coberturaReportFile: 'coverage.xml', conditionalCoverageTargets: '90,70,80', lineCoverageTargets: '95,90,85'
+                unstash 'flake8'
+                recordIssues tools: [flake8(name: 'Flake8', pattern: 'flake8.out')], qualityGates: [[threshold: 8, type: 'TOTAL', unstable: true], [threshold: 10, type: 'TOTAL', unsatble: false]]
+                unstash 'bandit'
+                recordIssues tools: [pyLint (name: 'bandit', pattern: 'bandit.out')], qualityGates: [[threshold: 2, type: 'TOTAL', unstable: true], [threshold: 4, type: 'TOTAL', unstable: false]]
+                unstash 'performance'
+                perfReport sourceDataFiles: 'test.jtl'
             }
         }
     }
