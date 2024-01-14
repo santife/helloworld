@@ -1,0 +1,80 @@
+pipeline {
+    agent any
+    stages {
+        stage ('Get Code'){
+            steps {
+                //Optenemos el codigo de nuestro Git
+                git url: 'http://github.com/santife/helloworld.git'
+                
+            }
+        }
+        
+        stage('Rest') {
+            steps {
+                sh '''
+                    java -jar /var/lib/jenkins/workspace/wiremock-standalone-3.3.1.jar --port 9090 --root-dir test/wiremock/ &
+                    sleep 3 
+                    export FLASK_APP=app/api.py
+                    export FLASK_ENV=development
+                    flask run & 
+                    export PYTHONPATH=$(pwd)
+                    pytest --junitxml=result_rest.xml test/rest
+                '''
+            }
+        }
+        
+        stage('unit') {
+            steps {
+                sh '''
+                    export PYTHONPATH=$(pwd)
+                    pytest --junitxml=result_unit.xml test/unit
+                '''
+                junit 'result*.xml'
+            }
+        }
+        
+        
+        stage ('Covertura') {
+            steps {
+                catchError (buildResult: 'UNSTABLE', stageResult: 'FAILURE'){
+                    sh '''
+                        coverage run --branch --source=app --omit=app/__init__.py,app/api.py -m pytest test/unit
+                        coverage xml
+                    '''
+                    cobertura coberturaReportFile: 'coverage.xml', conditionalCoverageTargets: '90,70,80', lineCoverageTargets: '95,90,85'
+                }
+            }
+        }
+        
+        stage('Static'){
+            steps{
+                sh '''
+                    export PYTHONPATH=$(pwd)
+                    flake8 --exit-zero --format=pylint app >flake8.out
+                '''
+                recordIssues tools: [flake8(name: 'Flake8', pattern: 'flake8.out')], qualityGates: [[threshold: 8, type: 'TOTAL', unstable: true], [threshold: 10, type: 'TOTAL', unsatble: false]]
+        
+            }
+        }
+        
+        stage('Security'){
+            steps{
+                sh'''
+                    bandit --exit-zero -r . -f custom -o bandit.out --severity-level medium --msg-template "{abspath}:{line}: [{test_id}, {severity}] {msg}"
+                '''
+                recordIssues tools: [pyLint (name: 'bandit', pattern: 'bandit.out')], qualityGates: [[threshold: 2, type: 'TOTAL', unstable: true], [threshold: 4, type: 'TOTAL', unstable: false]]
+            }
+        }
+        
+        stage('Performance'){
+            steps{
+                //no es necesario levantar FLASK ya que esta levantado en la stage Rest
+                    
+                sh '''
+                    /var/lib/jenkins/workspace/apache-jmeter-5.6.3/bin/jmeter.sh -n -t test.jmx -f -l test.jtl
+                '''
+                perfReport sourceDataFiles: 'test.jtl'
+            }
+        }
+    }
+}
